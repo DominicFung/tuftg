@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
+import sys
 import random
 import ntpath
 import os
@@ -22,6 +23,7 @@ from tuftg import tuftg
 @click.option("--depth", default=4.5, help="maximum depth (z)")
 @click.option("--spacing", default=0.25, help="space between tufting lines (inches)")
 @click.option("--seed", default=0, help="random seed")
+@click.option("--loglevel", default="INFO", help="set the log level.")
 def run(
     folder,
     file,
@@ -31,11 +33,10 @@ def run(
     depth,
     spacing,
     seed,
+    loglevel
 ):
     random.seed(seed)
     imconvert = "convert"
-    if os.name == "nt":
-        imconvert = "imconvert"
 
     if folder != ".":
         try:
@@ -51,7 +52,9 @@ def run(
 
     copyfile(file, os.path.join(foldername, ntpath.basename(file)))
 
-    log.add("file.log", level="DEBUG")
+    log.remove()
+    log.add(sys.stderr, level="INFO")
+    log.add("file.log", level=loglevel)
 
     log.info(f"working in {foldername}")
     log.debug(foldername)

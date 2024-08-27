@@ -1,0 +1,1 @@
+{"rule":"PRP_JJ","sentence":"^\\QWe rapid move f\\E$"}

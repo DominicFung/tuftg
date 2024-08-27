@@ -26,14 +26,14 @@ platformWin = True
 if (os.name != "nt"):
   platformWin = False
 
-START = "M17"
-STOP = "M18"
+START = "M7"
+STOP = "M9"
 
 def tool_info():
   print("( Tool info: )")
   print("( Tool type: Tufting Gun )")
 
-def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.04):
+def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
   log.info("convert in progress ..")
   tool_info()
   log.debug(f"options {options}")
@@ -56,8 +56,10 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.04):
     if min(row) == 0: continue
     
     y = (len(img) - j) * px_len
-    z = move_to_row_start(g, 0, y) # an extra step, could be removed.
     g.write("( new row )")
+
+    check_row_start = True
+    z = 0
 
     for i, p in enumerate(row):
       x = i * px_len
@@ -65,7 +67,11 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.04):
       log.debug(f"i: {i}, x: {x}, y: {y}, p: {p}, z: {z}")
 
       if p < z:   # tuff time!
-        g.rapid(x=x, y=y)
+        if check_row_start:
+          z = move_to_row_start(g, x, y)
+          check_row_start = False
+        else:
+          g.rapid(x=x, y=y)
         g.rapid(z=p)        ## 1. plunge
         g.write(START)      ## 2. start tufting
         z = p
@@ -109,7 +115,7 @@ options = dict(
   safety_height = .012,
   tolerance = .001,
   spindle_speed = 1000,
-  units = "0",
+  units = "G20", #G20 = inches, G21 = mm
   feed_rate = 12
 )
 
@@ -130,7 +136,7 @@ def tuftg(im_name, depth, spacing):
   fileName = "gcodeout"
   if not os.path.isdir(newDir):
       os.makedirs(newDir)      
-  finalFileName = fileName+str(datetime.datetime.now().strftime("_%d%m%Y_%H.%M.%S"))+fileExtention
+  finalFileName = fileName+str(datetime.datetime.now().strftime("_%d%m%Y_%H.%M.%S.%f")[:-3])+fileExtention
   if platformWin:
       sys.stdout = open(newDir+"\\"+finalFileName, 'w')
   else:
