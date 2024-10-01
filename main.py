@@ -12,21 +12,23 @@ import os
 import subprocess
 from shutil import copyfile
 
-from tuftg import tuftg
+from src.tuftg import tuftg
 
 @click.command()
 @click.option("--file", prompt="image in?", help="svg to process")
 @click.option("--folder", default="img_output", help="folder to output into")
+@click.option("--feed", default=100, help="set the speed of the machine when tufting")
 @click.option("--colours", default=4, help="number of colours (yarn) ")
-@click.option("--width", default=4000, help="maximum bed width (x)")
-@click.option("--height", default=4000, help="maximum bed height (y)")
-@click.option("--depth", default=4.5, help="maximum depth (z)")
+@click.option("--width", default=150, help="maximum bed width (x)")
+@click.option("--height", default=150, help="maximum bed height (y)")
+@click.option("--depth", default=3.8, help="maximum depth (z)")
 @click.option("--spacing", default=0.25, help="space between tufting lines (inches)")
 @click.option("--seed", default=0, help="random seed")
 @click.option("--loglevel", default="INFO", help="set the log level.")
 def run(
     folder,
     file,
+    feed,
     colours,
     width,
     height,
@@ -81,7 +83,7 @@ def run(
         subprocess.run(cmd.split())
 
         fname = f"{os. getcwd()}/c-{img_number}.png"
-        outputfile = tuftg(fname, depth, spacing)
+        outputfile = tuftg(fname, depth, spacing, feed)
 
         log.info(f"gcode: /nc_output/{outputfile}")
         img_number+=1

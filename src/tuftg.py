@@ -18,7 +18,7 @@ from math import *
 import numpy as np
 import sys, os
 
-from author import Gcode
+from src.author import Gcode
 
 from loguru import logger as log
 
@@ -39,7 +39,7 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
   log.debug(f"options {options}")
   log.debug(f"img {img}")
 
-  g = Gcode(safetyheight=options.get("safety_height"),
+  g = Gcode(safetyheight=-options.get("safety_height"),
             tolerance=options.get("tolerance"),
             spindle_speed=options.get("spindle_speed"),
             units=options.get("units"))
@@ -93,6 +93,30 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
       else:
         continue
 
+"""
+  Unlike milling, where the wood is always horizontal, 
+  monk's cloth stretches! Meaning as you approach the center of the fabric, 
+  you should push your tufting gun lower!
+
+      |\ 
+      | \ (min_dist * stretch + min_dist) 
+    z |  \ 
+      |___\ 
+       (min_dist)
+
+  (min_dist * stretch + min_dist)^2 = min_dist^2 + z^2
+      
+  z^2 = (min_dist * stretch + min_dist)^2 - min_dist^2
+      = min_dist^2 * stretch^2 + 2 * min_dist^2 * stretch + min_dist^2 - min_dist^2
+      = min_dist^2( stretch^2 + 2 * stretch )
+    
+    z = min_dist * sqr( stretch^2 + 2 * stretch )
+"""
+def fabric_stretch(width: float, height: float, x: float, y: float, stretch:float=0.3) -> float:
+  min_dist = min(width-x, x, height-y, y)
+  log.debug(f"min {width-x} {x} {height-y} {y} = {min_dist}")
+  return min_dist * sqrt( stretch ** 2 + stretch )
+
 def move_to_row_start(g: Gcode, x:float, y: float) -> float:
   g.rapid(x, y)
   g.rapid(z=0)
@@ -115,11 +139,11 @@ options = dict(
   safety_height = .012,
   tolerance = .001,
   spindle_speed = 1000,
-  units = "G20", #G20 = inches, G21 = mm
-  feed_rate = 12
+  units = "G20", # G20 = inches, G21 = mm
+  feed_rate = 100 # was 12 (inches or mm per min)
 )
 
-def tuftg(im_name, depth, spacing):
+def tuftg(im_name, depth, spacing, feed=100):
   from PIL import Image
 
   im = Image.open(im_name)
@@ -150,6 +174,9 @@ def tuftg(im_name, depth, spacing):
   else:
       nim = nim / 255.0
   
+  if feed:
+     options["feed_rate"] = feed
+
   nim = nim * -depth
   log.debug("(Image max= {0} min={1})".format(nim.max(),nim.min()))
 
