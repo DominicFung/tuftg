@@ -18,7 +18,7 @@ It also only tufts horizontally. Probably lots of cleaver engineering to make it
 ## Usage
 
 ```
-python3 img2gcode.py --file images/monstera-leaf-vector-16307990.jpg --colours 2 --width 150 --height 150
+python3 main.py --file images/monstera-leaf-vector-16307990.jpg --colours 2 --width 150 --height 150
 ```
 
 gcode is located in `img_output/<name of image>/nc_output/`

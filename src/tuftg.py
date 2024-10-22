@@ -33,7 +33,7 @@ def tool_info():
   print("( Tool info: )")
   print("( Tool type: Tufting Gun )")
 
-def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
+def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=5): # was 0.22 inches
   log.info("convert in progress ..")
   tool_info()
   log.debug(f"options {options}")
@@ -50,6 +50,9 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
   g.set_feed(options.get("feed_rate"))
 
   log.info(f"max x: {px_len * len(img[0])}, max y: {px_len * len(img)}")
+
+  max_y = len(img)
+  max_x = len(img[0])
 
   for j, row in enumerate(img):
     log.debug(f"row {row}")
@@ -77,13 +80,21 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
         z = p
 
       elif p > z: # stop tufting.
-        tuft(g, x, y)
+        # tuft(g, x, y)
+
+        tuft(g, x=x, y=y/2, z=z_stretch( x, max_y, z, max_depth ))
+        tuft(g, x=x, y=y, z=z)
+
         g.write(STOP)       ## 1. stop tufting
         g.rapid(z=p)        ## 2. move up
         z = p
 
       elif i == len(row)-1:  # last px
-        tuft(g, x, y)
+        # tuft(g, x, y)
+
+        tuft(g, x, y/2, z_stretch( x, max_y, z, max_depth ))
+        tuft(g, x, y, z)
+
         g.write(STOP)       ## stop tufting
         g.rapid(z=p)        ## 2. move up
 
@@ -93,29 +104,58 @@ def convert(options:dict, img:list[list[float]], max_depth=4.5, px_len=0.22):
       else:
         continue
 
+
 """
   Unlike milling, where the wood is always horizontal, 
-  monk's cloth stretches! Meaning as you approach the center of the fabric, 
-  you should push your tufting gun lower!
+  monk's cloth stretches! Meaning as you appoach the center of the fabric, 
+  you should push your tufting gun lower.
+   __________
+  | \___4__/ |
+  |1| 0    | |
+  | |______|2|
+  |_/_3____\_|
 
-      |\ 
-      | \ (min_dist * stretch + min_dist) 
-    z |  \ 
-      |___\ 
-       (min_dist)
-
-  (min_dist * stretch + min_dist)^2 = min_dist^2 + z^2
-      
-  z^2 = (min_dist * stretch + min_dist)^2 - min_dist^2
-      = min_dist^2 * stretch^2 + 2 * min_dist^2 * stretch + min_dist^2 - min_dist^2
-      = min_dist^2( stretch^2 + 2 * stretch )
-    
-    z = min_dist * sqr( stretch^2 + 2 * stretch )
 """
-def fabric_stretch(width: float, height: float, x: float, y: float, stretch:float=0.3) -> float:
-  min_dist = min(width-x, x, height-y, y)
-  log.debug(f"min {width-x} {x} {height-y} {y} = {min_dist}")
-  return min_dist * sqrt( stretch ** 2 + stretch )
+def z_stretch(y: int, my: int, x: int, mx: int, min_z: float, max_z: float) -> float:
+  stretch = 100 # Change this. This is the distance from outer rectangle to inner rectangle in mm.
+  if my < stretch or mx < stretch:
+     log.error(f"my {my} or mx {mx} is < than stretch {stretch}")
+     raise Exception(f"my {my} or mx {mx} is < than stretch {stretch}")
+
+  # section 0
+  if y >= stretch and y <= my - stretch and x >= stretch and x <= mx - stretch:
+     return max_z
+  # section 1
+  elif in_trapezoid([(0,0), (stretch, stretch), (stretch, my - stretch), (0, my)], (x, y)):
+      return (((stretch - x) / stretch) * (max_z - min_z)) + min_z
+  # section 2
+  elif in_trapezoid([(mx, 0), (mx-stretch, stretch), (mx-stretch, my-stretch), (mx, my)], (x, y)):
+     return (((x - (mx - stretch)) / stretch) * (max_z - min_z)) + min_z
+  # section 3
+  elif in_trapezoid([(0, 0), (stretch, stretch), (mx-stretch, stretch), (mx, 0)], (x, y)):
+     return (((stretch - y) / stretch) * (max_z - min_z)) + min_z
+  # section 4
+  elif in_trapezoid([(0, my), (stretch, my-stretch), (mx-stretch, my-stretch), (mx, my)], (x, y)):
+     return ((y - (my - stretch) / stretch) * (max_z - min_z)) + min_z
+  else:
+     raise Exception(f"coordinates:({x},{y}) did not fall into any of the sections 0 to 4. Could be an edge case?")
+
+def in_trapezoid(trapezoid, point):
+  def cross_product(p1, p2, p):
+    return (p2[0] - p1[0]) * (p[1] - p1[1]) - (p2[1] - p1[1]) * (p[0] - p1[0])
+
+    # Unpack trapezoid vertices
+  (x1, y1), (x2, y2), (x3, y3), (x4, y4) = trapezoid
+  x, y = point
+    
+  # Check if the point is on the left side of each edge
+  if (cross_product((x1, y1), (x2, y2), (x, y)) >= 0 and
+      cross_product((x2, y2), (x3, y3), (x, y)) >= 0 and
+      cross_product((x3, y3), (x4, y4), (x, y)) >= 0 and
+      cross_product((x4, y4), (x1, y1), (x, y)) >= 0):
+    return True
+  else:
+    return False
 
 def move_to_row_start(g: Gcode, x:float, y: float) -> float:
   g.rapid(x, y)
@@ -130,20 +170,20 @@ def move_to_row_start(g: Gcode, x:float, y: float) -> float:
 
   return 0
 
-def tuft(g: Gcode, x:float, y: float):
-  g.cut(x=x, y=y)
+def tuft(g: Gcode, x:float|None, y: float|None, z: float|None):
+  g.cut(x=x, y=y, z=z)
   g.flush()
-  g.write(f"( cut {x} {y} )")
+  g.write(f"( cut {x} {y} {z})")
 
 options = dict(
   safety_height = .012,
   tolerance = .001,
   spindle_speed = 1000,
-  units = "G20", # G20 = inches, G21 = mm
-  feed_rate = 100 # was 12 (inches or mm per min)
+  units = "G21", # G20 = inches, G21 = mm
+  feed_rate = 2540 # 100 inches? # was 12 (inches or mm per min)
 )
 
-def tuftg(im_name, depth, spacing, feed=100):
+def tuftg(im_name, depth, max_depth, spacing, feed=100):
   from PIL import Image
 
   im = Image.open(im_name)
@@ -180,6 +220,9 @@ def tuftg(im_name, depth, spacing, feed=100):
   nim = nim * -depth
   log.debug("(Image max= {0} min={1})".format(nim.max(),nim.min()))
 
-  convert(options, nim, max_depth=depth)
+  if max_depth < depth:
+     max_depth = depth
+
+  convert(options, nim, max_depth=max_depth)
 
   return finalFileName

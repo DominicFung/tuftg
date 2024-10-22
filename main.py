@@ -17,12 +17,13 @@ from src.tuftg import tuftg
 @click.command()
 @click.option("--file", prompt="image in?", help="svg to process")
 @click.option("--folder", default="img_output", help="folder to output into")
-@click.option("--feed", default=100, help="set the speed of the machine when tufting")
+@click.option("--feed", default=2540, help="set the speed of the machine when tufting")
 @click.option("--colours", default=4, help="number of colours (yarn) ")
-@click.option("--width", default=150, help="maximum bed width (x)")
-@click.option("--height", default=150, help="maximum bed height (y)")
-@click.option("--depth", default=3.8, help="maximum depth (z)")
-@click.option("--spacing", default=0.25, help="space between tufting lines (inches)")
+@click.option("--width", default=150,   help="maximum bed width  (x) in pxs. Each px is 5mms of travel. You can set this to a different value using --pxs.")
+@click.option("--height", default=150,  help="maximum bed height (y) in pxs. Each px is 5mms of travel. You can set this to a different value using --pxs.")
+@click.option("--depth", default=110.1944, help="minimum depth (z), this is in mm.")                                               # was 3.236
+@click.option("--max_depth", default=132.9944, help="maximum depth (z), to account for the stretch of material, this is in mm")   # was 5.236
+@click.option("--spacing", default=0.25, help="space between tufting lines (mm)")
 @click.option("--seed", default=0, help="random seed")
 @click.option("--loglevel", default="INFO", help="set the log level.")
 def run(
@@ -33,6 +34,7 @@ def run(
     width,
     height,
     depth,
+    max_depth, 
     spacing,
     seed,
     loglevel
@@ -63,17 +65,20 @@ def run(
     os.chdir(foldername)
     file = ntpath.basename(file)
 
-    cmd = f"{imconvert} {file} +dither -colors {colours} -resize {width}x{height} reduce-colour-{colours}.png"
+    cmd = f"{imconvert} {file} +dither -colors {colours} -resize {width}x{height} -morphology Close Diamond -morphology Erode Diamond reduce-colour-{colours}.png"
     log.debug(cmd)
     subprocess.run(cmd.split())
 
     img = cv2.imread(f"reduce-colour-{colours}.png")
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     hist = cv2.calcHist([gray],[0],None,[256],[0,256])
-    colors = np.where(hist>5000)
+
+    hist_flat = hist.flatten()
+    colors = np.argsort(hist_flat)[-colours:] # get the x largest colours.
+    log.info(f"colors: {colors}")
 
     img_number = 0
-    for color in colors[0]:
+    for color in colors:
         log.debug(f"working on color: {color}")
         split_image = img.copy()
         split_image[np.where(gray != color)] = 0
@@ -83,7 +88,7 @@ def run(
         subprocess.run(cmd.split())
 
         fname = f"{os. getcwd()}/c-{img_number}.png"
-        outputfile = tuftg(fname, depth, spacing, feed)
+        outputfile = tuftg(fname, depth, max_depth, spacing, feed)
 
         log.info(f"gcode: /nc_output/{outputfile}")
         img_number+=1

@@ -1,0 +1,19 @@
+( Tool info: )
+( Tool type: Tufting Gun )
+G21
+G0 Z-0.0120
+G17 G40
+G80 G90 G94
+S1000 M3
+G04 P3
+G64 P0.0010
+F3500.0000
+( new row )
+G0 X80.000 Y416.200
+ Z0.0000
+G0 Z-133
+M7
+G1 X600.334
+( cut 10.56 28.82 )
+M9
+G0 Z-0.0000
