@@ -12,32 +12,34 @@ import os
 import subprocess
 from shutil import copyfile
 
-from src.tuftg import tuftg
+from src.tuftg import TuftG
 
 @click.command()
 @click.option("--file", prompt="image in?", help="svg to process")
 @click.option("--folder", default="img_output", help="folder to output into")
 @click.option("--feed", default=2540, help="set the speed of the machine when tufting")
 @click.option("--colours", default=4, help="number of colours (yarn) ")
-@click.option("--width", default=150,   help="maximum bed width  (x) in pxs. Each px is 5mms of travel. You can set this to a different value using --pxs.")
-@click.option("--height", default=150,  help="maximum bed height (y) in pxs. Each px is 5mms of travel. You can set this to a different value using --pxs.")
-@click.option("--depth", default=110.1944, help="minimum depth (z), this is in mm.")                                               # was 3.236
+
+@click.option("--width", default=150,   help="set image width  (x) in pxs. Image will be scaled (up or down) to the desired resolution. Each px is 5mms of travel. You can set this to a different value using --pxs.")
+@click.option("--height", default=150,  help="set image height (y) in pxs. Image will be scaled (up or down) to the desired resolution. Each px is 5mms of travel. You can set this to a different value using --pxs.")
+@click.option("--pxs", default=5,       help="sets mm/px. For example: a 150 x 150 image will travel 750mm in the x direction and 750 in the y direction.")
+
+@click.option("--bed_width", default=812.8,  help="set the maximum working area in x direction. You can find this value by jogging the maching to the right most point. This value is in mm.")
+@click.option("--bed_height", default=812.8, help="set the maximum working area in y direction. You can find this value by jogging the maching to the left most point. This value is in mm.")
+@click.option("--tuft_x_offset", default=10, help="the distance (in mm), the tufting needle is to the right or left of where the mill would be. This is useful in the case that the tufting gun cannot fit in the milling machine hole and needs to be mounted on the side. Will modify the max bed_width accordingly.")
+@click.option("--tuft_y_offset", default=0,  help="the distance (in mm), the tufting needle is to the up or down of where the mill would be. This is useful in the case that the tufting gun cannot fit in the milling machine hole and needs to be mounted on the side. Will modify the max bed_width accordingly.")
+
+@click.option("--depth", default=110.1944, help="minimum depth (z), this is in mm.")                                              # was 3.236
 @click.option("--max_depth", default=132.9944, help="maximum depth (z), to account for the stretch of material, this is in mm")   # was 5.236
 @click.option("--spacing", default=0.25, help="space between tufting lines (mm)")
 @click.option("--seed", default=0, help="random seed")
 @click.option("--loglevel", default="INFO", help="set the log level.")
 def run(
-    folder,
-    file,
-    feed,
-    colours,
-    width,
-    height,
-    depth,
-    max_depth, 
-    spacing,
-    seed,
-    loglevel
+    file, folder, feed, colours,
+    width, height, pxs,
+    bed_width, bed_height, tuft_x_offset, tuft_y_offset,
+    depth, max_depth, spacing,
+    seed,loglevel
 ):
     random.seed(seed)
     imconvert = "convert"
@@ -88,9 +90,16 @@ def run(
         subprocess.run(cmd.split())
 
         fname = f"{os. getcwd()}/c-{img_number}.png"
-        outputfile = tuftg(fname, depth, max_depth, spacing, feed)
 
-        log.info(f"gcode: /nc_output/{outputfile}")
+        tg = TuftG(im_name=fname, pxs=pxs, feed=feed,
+                  bed_width=bed_width, bed_height=bed_height, tuft_x_offset=tuft_x_offset, tuft_y_offset=tuft_y_offset,
+                  depth=depth, max_depth=max_depth, spacing=spacing)
+        
+        outputfile = tg.convert_img()
+        log.info(f"images: {folder}/{foldername}/c-{img_number}.png")
+
+        tg.write_gcode()
+        log.info(f"gcode: folder/{foldername}/nc_output/{outputfile}")
         img_number+=1
 
     plt.hist(gray.ravel(),256,[0,256])
